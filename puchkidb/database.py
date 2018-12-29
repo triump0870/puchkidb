@@ -55,3 +55,15 @@ def _get_doc_ids(doc_ids, eids):
         return eids
     else:
         return doc_ids
+
+
+class DataProxy(dict):
+    """
+    A proxy to a table's data that remembers the storage's
+    data dictionary.
+    """
+
+    def __init__(self, table, raw_data, **kwargs):
+        super(DataProxy, self).__init__(**kwargs)
+        self.update(table)
+        self.raw_data = raw_data
