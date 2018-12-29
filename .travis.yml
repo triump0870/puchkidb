@@ -1,0 +1,21 @@
+language: python
+sudo: false
+python:
+  - "pypy2.7-5.8.0"
+  - "pypy3.5-5.9.0"
+  - "nightly"
+  - "3.6"
+  - "3.5"
+  - "3.4"
+  - "2.7"
+matrix:
+  allow_failures:
+    - python: nightly
+  include:
+    - python: "3.6"
+      env: TOXENV=check
+
+install: pip install coveralls tox tox-travis setuptools_scm
+script: tox
+after_success: coveralls
+cache: pip
