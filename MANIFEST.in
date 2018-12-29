@@ -1,0 +1,15 @@
+exclude .gitignore
+exclude .coverage
+exclude .travis.yml
+exclude .eggs
+exclude .pytest_cache
+exclude puchkidb.egg-info
+include LICENSE
+include README.rst
+include setup.cfg
+prune .cache
+prune .git
+prune build
+prune dist
+recursive-exclude *.egg-info *
+recursive-include tests *.py
