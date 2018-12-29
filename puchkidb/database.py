@@ -67,3 +67,55 @@ class DataProxy(dict):
         super(DataProxy, self).__init__(**kwargs)
         self.update(table)
         self.raw_data = raw_data
+
+
+class StorageProxy(object):
+    """
+    A proxy that only allows to read a single table from a
+    storage.
+    """
+
+    def __init__(self, storage, table_name):
+        self._storage = storage
+        self._table_name = table_name
+
+    def _new_document(self, key, val):
+        doc_id = int(key)
+        return Document(val, doc_id)
+
+    def read(self):
+        raw_data = self._storage.read() or {}
+
+        try:
+            table = raw_data[self._table_name]
+        except KeyError:
+            raw_data.update({self._table_name: {}})
+            self._storage.write(raw_data)
+
+            return DataProxy({}, raw_data)
+
+        docs = {}
+        for key, val in iteritems(table):
+            doc = self._new_document(key, val)
+            docs[doc.doc_id] = doc
+
+        return DataProxy(docs, raw_data)
+
+    def write(self, data):
+        try:
+            # Try accessing the full data dict from the data proxy
+            raw_data = data.raw_data
+        except AttributeError:
+            # Not a data proxy, fall back to regular reading
+            raw_data = self._storage.read()
+
+        raw_data[self._table_name] = dict(data)
+        self._storage.write(raw_data)
+
+    def purge_table(self):
+        try:
+            data = self._storage.read() or {}
+            del data[self._table_name]
+            self._storage.write(data)
+        except KeyError:
+            pass
