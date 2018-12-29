@@ -9,6 +9,8 @@ except ImportError:
     from collections import Mapping
 import warnings
 
+from . import JSONStorage
+
 
 class Document(dict):
     """
@@ -119,3 +121,149 @@ class StorageProxy(object):
             self._storage.write(data)
         except KeyError:
             pass
+
+
+class PuchkiDB(object):
+    """
+    The main class of PuchkiDB.
+
+    Gives access to the database, provides methods to insert/search/remove
+    and getting tables.
+    """
+
+    DEFAULT_TABLE = '_default'
+    DEFAULT_STORAGE = JSONStorage
+
+    def __init__(self, *args, **kwargs):
+        """
+        Create a new instance of PuchkiDB.
+
+        All arguments and keyword arguments will be passed to the underlying
+        storage class (default: :class:`~puchkidb.storages.JSONStorage`).
+
+        :param storage: The class of the storage to use. Will be initialized
+                        with ``args`` and ``kwargs``.
+        :param default_table: The name of the default table to populate.
+        """
+
+        storage = kwargs.pop('storage', self.DEFAULT_STORAGE)
+        default_table = kwargs.pop('default_table', self.DEFAULT_TABLE)
+        self._cls_table = kwargs.pop('table_class', self.table_class)
+        self._cls_storage_proxy = kwargs.pop('storage_proxy_class',
+                                             self.storage_proxy_class)
+
+        # Prepare the storage
+        #: :type: Storage
+        self._storage = storage(*args, **kwargs)
+
+        self._opened = True
+
+        # Prepare the default table
+
+        self._table_cache = {}
+        self._table = self.table(default_table)
+
+    def __repr__(self):
+        args = [
+            'tables={}'.format(list(self.tables())),
+            'tables_count={}'.format(len(self.tables())),
+            'default_table_documents_count={}'.format(self.__len__()),
+            'all_tables_documents_count={}'.format(
+                ['{}={}'.format(table, len(self.table(table))) for table in self.tables()]),
+        ]
+
+        return '<{} {}>'.format(type(self).__name__, ', '.join(args))
+
+    def table(self, name=DEFAULT_TABLE, **options):
+        """
+        Get access to a specific table.
+
+        Creates a new table, if it hasn't been created before, otherwise it
+        returns the cached :class:`~puchkidb.Table` object.
+
+        :param name: The name of the table.
+        :type name: str
+        :param cache_size: How many query results to cache.
+        :param table_class: Which table class to use.
+        """
+
+        if name in self._table_cache:
+            return self._table_cache[name]
+
+        table_class = options.pop('table_class', self._cls_table)
+        table = table_class(self._cls_storage_proxy(self._storage, name), name, **options)
+
+        self._table_cache[name] = table
+
+        return table
+
+    def tables(self):
+        """
+        Get the names of all tables in the database.
+
+        :returns: a set of table names
+        :rtype: set[str]
+        """
+
+        return set(self._storage.read())
+
+    def purge_tables(self):
+        """
+        Purge all tables from the database. **CANNOT BE REVERSED!**
+        """
+
+        self._storage.write({})
+        self._table_cache.clear()
+
+    def purge_table(self, name):
+        """
+        Purge a specific table from the database. **CANNOT BE REVERSED!**
+
+        :param name: The name of the table.
+        :type name: str
+        """
+        if name in self._table_cache:
+            del self._table_cache[name]
+
+        proxy = StorageProxy(self._storage, name)
+        proxy.purge_table()
+
+    def close(self):
+        """
+        Close the database.
+        """
+        self._opened = False
+        self._storage.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        if self._opened:
+            self.close()
+
+    def __getattr__(self, name):
+        """
+        Forward all unknown attribute calls to the underlying standard table.
+        """
+        return getattr(self._table, name)
+
+    # Methods that are executed on the default table
+    # Because magic methods are not handled by __getattr__ we need to forward
+    # them manually here
+
+    def __len__(self):
+        """
+        Get the total number of documents in the default table.
+
+        >>> db = PuchkiDB('db.json')
+        >>> len(db)
+        0
+        """
+        return len(self._table)
+
+    def __iter__(self):
+        """
+        Iter over all documents from default table.
+        """
+        return self._table.__iter__()
