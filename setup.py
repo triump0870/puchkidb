@@ -51,7 +51,7 @@ setup(
     long_description=read('README.rst'),
     entry_points={
         'console_scripts': [
-            'puchkidb=puchkidb_cli.cli:main',
+            'puchkidb=puchkidb.puchkidb_cli.cli:main',
         ],
     },
 )
